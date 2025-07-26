@@ -1,4 +1,10 @@
 ---
+# Required packages for community.proxmox collection
+pve_install_packages: true
+
+pve_vm_packages:
+  - python3-proxmoxer
+  - python3-requests
 
 # Proxmox API connection settings
 # These must be provided by the user or in group_vars/host_vars
@@ -13,6 +19,11 @@ pve_api_token_secret: ""
 pve_node: ""
 pve_vmid: ""
 
+pve_start_stop_vm: true
+
 # VM management settings
 pve_shutdown_timeout: 300
 pve_start_vm_after_config: true
+
+# Toggles
+pve_remove_cloudinit_disk: true

@@ -1,18 +1,27 @@
 ---
+#########################
+# Install base packages #
+#########################
+- name: perform an apt update
+  apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: pve_install_packages | bool
 
-- name: gather os specific variables
-  include_vars: "{{ item }}"
-  with_first_found:
-    - "{{ ansible_distribution }}-{{ ansible_distribution_major_version }}.yml"
-    - "{{ ansible_distribution }}.yml" 
-    - "{{ ansible_os_family }}.yml"
-    - "default.yml"
+- name: install base packages
+  apt:
+    name: '{{ item }}'
+    state: present
+    update_cache: true
+  with_items:
+    - '{{ pve_vm_packages | default([]) }}'
+  when: pve_install_packages | bool
 
-#######################
+########################
 # VM Information Check #
-#######################
+########################
 - name: get VM information
-  community.proxmox.proxmox_vm_info:
+  community.general.proxmox_vm_info:
     api_host: "{{ pve_api_host }}"
     api_user: "{{ pve_api_user }}"
     api_password: "{{ pve_api_password | default(omit) }}"
@@ -26,11 +35,15 @@
   debug:
     msg: "VM {{ pve_vmid }} current state: {{ vm_info.proxmox_vms[0].status }}"
 
-####################
+- name: print all VM details
+  debug:
+    var: vm_info
+
+#######################
 # VM State Management #
-####################
+#######################
 - name: ensure VM is stopped before disk operations
-  community.proxmox.proxmox_kvm:
+  community.general.proxmox_kvm:
     api_host: "{{ pve_api_host }}"
     api_user: "{{ pve_api_user }}"
     api_password: "{{ pve_api_password | default(omit) }}"
@@ -40,32 +53,36 @@
     vmid: "{{ pve_vmid }}"
     state: stopped
     timeout: "{{ pve_shutdown_timeout }}"
-  when: vm_info.proxmox_vms[0].status != 'stopped'
+  when:
+    - vm_info.proxmox_vms[0].status != 'stopped'
+    - pve_start_stop_vm | bool
 
-######################
+###########################
 # Cloud-Init IDE2 Removal #
-######################
-- name: remove cloud-init drive (ide2) to prevent ZFS issues
-  community.proxmox.proxmox_disk:
-    api_host: "{{ pve_api_host }}"
-    api_user: "{{ pve_api_user }}"
-    api_password: "{{ pve_api_password | default(omit) }}"
-    api_token_id: "{{ pve_api_token_id | default(omit) }}"
-    api_token_secret: "{{ pve_api_token_secret | default(omit) }}"
-    node: "{{ pve_node }}"
-    vmid: "{{ pve_vmid }}"
-    disk: ide2
-    state: absent
-  ignore_errors: true
-  register: ide2_removal
+###########################
+- name: Remove Cloud-Init IDE2 Disk
+  block:
+    - name: remove cloud-init drive (ide2) to prevent ZFS issues
+      community.general.proxmox_disk:
+        api_host: "{{ pve_api_host }}"
+        api_user: "{{ pve_api_user }}"
+        api_password: "{{ pve_api_password | default(omit) }}"
+        api_token_id: "{{ pve_api_token_id | default(omit) }}"
+        api_token_secret: "{{ pve_api_token_secret | default(omit) }}"
+        vmid: "{{ pve_vmid }}"
+        disk: ide2
+        state: absent
+      ignore_errors: true
+      register: ide2_removal
 
-- name: display ide2 removal result
-  debug:
-    msg: "IDE2 removal result: {{ ide2_removal.msg | default('No ide2 disk found or already removed') }}"
+    - name: display ide2 removal result
+      debug:
+        msg: "IDE2 removal result: {{ ide2_removal.msg | default('No ide2 disk found or already removed') }}"
+  when: pve_remove_cloudinit_disk | bool
 
-################################
+###################################
 # Additional Post-Terraform Tasks #
-################################
+###################################
 # This section can be expanded for other post-terraform VM configuration tasks
 # Examples:
 # - Additional disk configuration
@@ -73,11 +90,11 @@
 # - Hardware parameter tuning
 # - Custom cloud-init configuration
 
-######################
-# VM Startup          #
-######################
+##############
+# VM Startup #
+##############
 - name: start VM after configuration
-  community.proxmox.proxmox_kvm:
+  community.general.proxmox_kvm:
     api_host: "{{ pve_api_host }}"
     api_user: "{{ pve_api_user }}"
     api_password: "{{ pve_api_password | default(omit) }}"
@@ -86,4 +103,6 @@
     node: "{{ pve_node }}"
     vmid: "{{ pve_vmid }}"
     state: started
-  when: pve_start_vm_after_config | bool
+  when:
+    - pve_start_vm_after_config | bool
+    - pve_start_stop_vm | bool
