@@ -1,0 +1,18 @@
+---
+
+# Proxmox API connection settings
+# These must be provided by the user or in group_vars/host_vars
+pve_api_host: ""
+pve_api_user: ""
+pve_api_password: ""
+# Alternative token-based authentication
+pve_api_token_id: ""
+pve_api_token_secret: ""
+
+# VM configuration
+pve_node: ""
+pve_vmid: ""
+
+# VM management settings
+pve_shutdown_timeout: 300
+pve_start_vm_after_config: true

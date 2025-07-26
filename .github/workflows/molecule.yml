@@ -1,0 +1,75 @@
+---
+name: Ansible Molecule Test Matrix
+
+'on':
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the codebase.
+        uses: actions/checkout@v2
+        with:
+          path: 'ansible-pve-vm-setup'
+
+      - name: Set up Python 3.
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+
+      - name: Install test dependencies.
+        run: pip3 install yamllint
+        working-directory: ansible-pve-vm-setup
+
+      - name: Lint code.
+        run: yamllint .
+        working-directory: ansible-pve-vm-setup
+
+  molecule:
+    name: Molecule
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        distro:
+          - debian12
+          - ubuntu2204
+          - ubuntu2404
+
+    steps:
+      - name: Check out the codebase.
+        uses: actions/checkout@v2
+        with:
+          path: 'ansible-pve-vm-setup'
+
+      - name: Set up Python 3.
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+
+      - name: Set up Docker
+        run: |
+          sudo systemctl start docker
+          sudo systemctl status docker
+
+      - name: Install test dependencies.
+        run: pip3 install ansible molecule molecule-plugins[docker] docker
+        working-directory: ansible-pve-vm-setup
+
+      - name: Create role symlink for Molecule
+        run: |
+          mkdir -p molecule/default/roles
+          ln -s ../../.. molecule/default/roles/ansible-pve-vm-setup
+        working-directory: ansible-pve-vm-setup
+
+      - name: Run Molecule tests.
+        run: molecule test
+        working-directory: ansible-pve-vm-setup
+        env:
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+          MOLECULE_DISTRO: ${{ matrix.distro }}

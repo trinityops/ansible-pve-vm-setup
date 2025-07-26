@@ -1,0 +1,13 @@
+---
+- name: Configure Proxmox VE VM post-terraform
+  hosts: all
+  gather_facts: false
+  vars:
+    roles_dir: roles
+  pre_tasks:
+    - name: set playbook dir when running this playbook here
+      set_fact:
+        ansible_root_dir: "{{ playbook_dir | regex_replace('/{{ roles_dir }}/ansible-pve-vm-setup', '') }}"
+      when: "'/{{ roles_dir }}/ansible-pve-vm-setup' in playbook_dir"
+  roles:
+    - role: ansible-pve-vm-setup

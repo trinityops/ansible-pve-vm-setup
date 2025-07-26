@@ -1,0 +1,15 @@
+---
+- name: Converge
+  hosts: all
+  tasks:
+    - name: "Include ansible-pve-vm-setup"
+      include_role:
+        name: "ansible-pve-vm-setup"
+      vars:
+        # Mock values for linting/testing - not actual PVE connections
+        pve_api_host: "test.example.com"
+        pve_api_user: "test@pve"
+        pve_api_password: "testpass"
+        pve_node: "testnode"
+        pve_vmid: "100"
+        pve_start_vm_after_config: false

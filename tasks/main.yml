@@ -1,0 +1,89 @@
+---
+
+- name: gather os specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_distribution }}.yml" 
+    - "{{ ansible_os_family }}.yml"
+    - "default.yml"
+
+#######################
+# VM Information Check #
+#######################
+- name: get VM information
+  community.proxmox.proxmox_vm_info:
+    api_host: "{{ pve_api_host }}"
+    api_user: "{{ pve_api_user }}"
+    api_password: "{{ pve_api_password | default(omit) }}"
+    api_token_id: "{{ pve_api_token_id | default(omit) }}"
+    api_token_secret: "{{ pve_api_token_secret | default(omit) }}"
+    node: "{{ pve_node }}"
+    vmid: "{{ pve_vmid }}"
+  register: vm_info
+
+- name: display VM current state
+  debug:
+    msg: "VM {{ pve_vmid }} current state: {{ vm_info.proxmox_vms[0].status }}"
+
+####################
+# VM State Management #
+####################
+- name: ensure VM is stopped before disk operations
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ pve_api_host }}"
+    api_user: "{{ pve_api_user }}"
+    api_password: "{{ pve_api_password | default(omit) }}"
+    api_token_id: "{{ pve_api_token_id | default(omit) }}"
+    api_token_secret: "{{ pve_api_token_secret | default(omit) }}"
+    node: "{{ pve_node }}"
+    vmid: "{{ pve_vmid }}"
+    state: stopped
+    timeout: "{{ pve_shutdown_timeout }}"
+  when: vm_info.proxmox_vms[0].status != 'stopped'
+
+######################
+# Cloud-Init IDE2 Removal #
+######################
+- name: remove cloud-init drive (ide2) to prevent ZFS issues
+  community.proxmox.proxmox_disk:
+    api_host: "{{ pve_api_host }}"
+    api_user: "{{ pve_api_user }}"
+    api_password: "{{ pve_api_password | default(omit) }}"
+    api_token_id: "{{ pve_api_token_id | default(omit) }}"
+    api_token_secret: "{{ pve_api_token_secret | default(omit) }}"
+    node: "{{ pve_node }}"
+    vmid: "{{ pve_vmid }}"
+    disk: ide2
+    state: absent
+  ignore_errors: true
+  register: ide2_removal
+
+- name: display ide2 removal result
+  debug:
+    msg: "IDE2 removal result: {{ ide2_removal.msg | default('No ide2 disk found or already removed') }}"
+
+################################
+# Additional Post-Terraform Tasks #
+################################
+# This section can be expanded for other post-terraform VM configuration tasks
+# Examples:
+# - Additional disk configuration
+# - Network interface adjustments  
+# - Hardware parameter tuning
+# - Custom cloud-init configuration
+
+######################
+# VM Startup          #
+######################
+- name: start VM after configuration
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ pve_api_host }}"
+    api_user: "{{ pve_api_user }}"
+    api_password: "{{ pve_api_password | default(omit) }}"
+    api_token_id: "{{ pve_api_token_id | default(omit) }}"
+    api_token_secret: "{{ pve_api_token_secret | default(omit) }}"
+    node: "{{ pve_node }}"
+    vmid: "{{ pve_vmid }}"
+    state: started
+  when: pve_start_vm_after_config | bool
